@@ -1,0 +1,46 @@
+# Jekyll configuration for dajia archive
+title: 腾讯·大家 存档
+description: web.archive.org 中 dajia.qq.com 历史文章存档
+url: "https://lishuhang.me"
+baseurl: "/dajia"
+timezone: Asia/Shanghai
+lang: zh-CN
+
+# Use minimal theme
+theme: jekyll-theme-minimal
+
+# Post settings
+permalink: /:categories/:year/:month/:day/:title/
+
+# Markdown
+markdown: kramdown
+kramdown:
+  input: GFM
+  hard_wrap: false
+
+# Collections
+collections:
+  posts:
+    output: true
+    permalink: /posts/:title/
+
+# Pagination
+plugins:
+  - jekyll-paginate
+paginate: 30
+paginate_path: "/page:num/"
+
+# Defaults
+defaults:
+  - scope:
+      path: ""
+      type: "posts"
+    values:
+      layout: "post"
+
+# Exclude
+exclude:
+  - README.md
+  - Gemfile
+  - Gemfile.lock
+  - scripts/

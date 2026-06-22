@@ -4,7 +4,14 @@ layout: default
 <div class="main-wrapper">
 
   {% comment %}Find all years, sorted descending{% endcomment %}
-  {% assign all_years = site.posts | map: "date" | map: "year" | uniq | sort | reverse %}
+  {% assign all_years = "" | split: "," %}
+  {% for post in site.posts %}
+    {% assign y = post.date | date: "%Y" %}
+    {% unless all_years contains y %}
+      {% assign all_years = all_years | push: y %}
+    {% endunless %}
+  {% endfor %}
+  {% assign all_years = all_years | sort | reverse %}
 
   {% comment %}Active year: page.year or latest{% endcomment %}
   {% assign active_year = page.year %}

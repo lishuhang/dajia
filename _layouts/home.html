@@ -1,11 +1,3 @@
 ---
-layout: default
+layout: year_month
 ---
-<div class="main-wrapper">
-  <p>共 {{ site.posts.size }} 篇文章</p>
-  <ul>
-    {% for post in site.posts limit:20 %}
-    <li><a href="{{ post.url | relative_url }}">{{ post.title }}</a></li>
-    {% endfor %}
-  </ul>
-</div>

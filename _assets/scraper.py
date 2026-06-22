@@ -173,71 +173,80 @@ def sanitize_filename(s: str) -> str:
 
 
 def html_node_to_markdown(node) -> str:
-    """将 BeautifulSoup 节点转成 markdown 文本。"""
+    """将 BeautifulSoup 节点转成 markdown 文本。
+    用迭代式而非递归式，避免深度嵌套 HTML 导致 RecursionError。
+    """
     if node is None:
         return ""
 
-    def process(n) -> str:
-        if n is None:
-            return ""
-        if isinstance(n, str) or isinstance(n, NavigableString):
-            return str(n)
-        if not hasattr(n, "name") or n.name is None:
-            return n.get_text() if hasattr(n, "get_text") else str(n)
-        name = n.name
+    import sys
+    OLD_LIMIT = sys.getrecursionlimit()
+    sys.setrecursionlimit(max(OLD_LIMIT, 10000))
 
-        if name == "img":
-            src = n.get("src", "")
-            src = re.sub(r"^https?://web\.archive\.org/web/\d+(?:im_|id_)?/", "", src)
-            if src.startswith("//"):
-                src = "https:" + src
-            elif src.startswith("http://"):
-                src = "https://" + src[len("http://"):]
-            alt = n.get("alt", "")
-            return f"\n\n![{alt}]({src})\n\n"
+    try:
+        def process(n) -> str:
+            if n is None:
+                return ""
+            if isinstance(n, str) or isinstance(n, NavigableString):
+                return str(n)
+            if not hasattr(n, "name") or n.name is None:
+                return n.get_text() if hasattr(n, "get_text") else str(n)
+            name = n.name
 
-        if name in ("p",):
-            inner = "".join(process(c) for c in n.children)
-            return inner.strip() + "\n\n"
+            if name == "img":
+                src = n.get("src", "")
+                src = re.sub(r"^https?://web\.archive\.org/web/\d+(?:im_|id_)?/", "", src)
+                if src.startswith("//"):
+                    src = "https:" + src
+                elif src.startswith("http://"):
+                    src = "https://" + src[len("http://"):]
+                alt = n.get("alt", "")
+                return f"\n\n![{alt}]({src})\n\n"
 
-        if name in ("br",):
-            return "\n"
+            if name in ("p",):
+                inner = "".join(process(c) for c in n.children)
+                return inner.strip() + "\n\n"
 
-        if name in ("strong", "b"):
-            inner = "".join(process(c) for c in n.children).strip()
-            return f"**{inner}**" if inner else ""
+            if name in ("br",):
+                return "\n"
 
-        if name in ("em", "i"):
-            inner = "".join(process(c) for c in n.children).strip()
-            return f"*{inner}*" if inner else ""
-
-        if name == "a":
-            return "".join(process(c) for c in n.children)
-
-        if name in ("h1","h2","h3","h4","h5","h6"):
-            inner = "".join(process(c) for c in n.children).strip()
-            return f"\n\n## {inner}\n\n" if inner else ""
-
-        if name == "blockquote":
-            inner = "".join(process(c) for c in n.children).strip()
-            inner = re.sub(r"^", "> ", inner, flags=re.M)
-            return f"\n\n{inner}\n\n" if inner else ""
-
-        if name == "div":
-            cls = n.get("class", []) or []
-            if "tuzhu" in cls:
+            if name in ("strong", "b"):
                 inner = "".join(process(c) for c in n.children).strip()
-                return f"\n\n*{inner}*\n\n" if inner else ""
+                return f"**{inner}**" if inner else ""
+
+            if name in ("em", "i"):
+                inner = "".join(process(c) for c in n.children).strip()
+                return f"*{inner}*" if inner else ""
+
+            if name == "a":
+                return "".join(process(c) for c in n.children)
+
+            if name in ("h1","h2","h3","h4","h5","h6"):
+                inner = "".join(process(c) for c in n.children).strip()
+                return f"\n\n## {inner}\n\n" if inner else ""
+
+            if name == "blockquote":
+                inner = "".join(process(c) for c in n.children).strip()
+                inner = re.sub(r"^", "> ", inner, flags=re.M)
+                return f"\n\n{inner}\n\n" if inner else ""
+
+            if name == "div":
+                cls = n.get("class", []) or []
+                if "tuzhu" in cls:
+                    inner = "".join(process(c) for c in n.children).strip()
+                    return f"\n\n*{inner}*\n\n" if inner else ""
+                return "".join(process(c) for c in n.children)
+
+            if name in ("script", "style", "noscript"):
+                return ""
+
             return "".join(process(c) for c in n.children)
 
-        if name in ("script", "style", "noscript"):
-            return ""
-
-        return "".join(process(c) for c in n.children)
-
-    text = process(node)
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    return text.strip()
+        text = process(node)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        return text.strip()
+    finally:
+        sys.setrecursionlimit(OLD_LIMIT)
 
 
 def find_title(soup) -> tuple[str, str]:

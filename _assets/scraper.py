@@ -44,6 +44,9 @@ POSTS_DIR = REPO_DIR / "_posts"
 GH_TOKEN = os.environ.get("DAJIA_GH_TOKEN", "")
 GH_REPO = "lishuhang/dajia"
 
+# Runtime limit (seconds). Can be overridden via --max-runtime
+MAX_RUNTIME = 480
+
 # ============ HTTP ============
 SESSION = requests.Session()
 SESSION.headers.update({
@@ -587,7 +590,7 @@ def git_push_batch(batch_num: int, files: list[Path]) -> bool:
         if not GH_TOKEN:
             log("  warning: DAJIA_GH_TOKEN env var not set, skipping push")
             return False
-        for attempt in range(3):
+        for attempt in range(5):
             r = subprocess.run(
                 ["git", "push", f"https://lishuhang:{GH_TOKEN}@github.com/{GH_REPO}.git"],
                 cwd=REPO_DIR, env=env, capture_output=True, text=True
@@ -596,6 +599,26 @@ def git_push_batch(batch_num: int, files: list[Path]) -> bool:
                 log(f"  pushed batch {batch_num}: {len(files)} articles")
                 return True
             log(f"  push attempt {attempt+1} failed: {r.stderr[:200]}")
+            # If rejected (non-fast-forward), pull --rebase and retry
+            if "rejected" in r.stderr or "non-fast-forward" in r.stderr:
+                log(f"  pulling --rebase to resolve conflict...")
+                subprocess.run(
+                    ["git", "fetch", f"https://lishuhang:{GH_TOKEN}@github.com/{GH_REPO}.git", "main"],
+                    cwd=REPO_DIR, env=env, capture_output=True, text=True
+                )
+                # Stash any uncommitted search-index.json changes (GitHub Actions may update)
+                subprocess.run(["git", "stash"], cwd=REPO_DIR, env=env, capture_output=True, text=True)
+                r2 = subprocess.run(
+                    ["git", "rebase", "FETCH_HEAD"],
+                    cwd=REPO_DIR, env=env, capture_output=True, text=True
+                )
+                if r2.returncode != 0:
+                    log(f"  rebase failed: {r2.stderr[:200]}")
+                    subprocess.run(["git", "rebase", "--abort"], cwd=REPO_DIR, env=env, capture_output=True)
+                    subprocess.run(["git", "stash", "pop"], cwd=REPO_DIR, env=env, capture_output=True)
+                    time.sleep(5)
+                    continue
+                subprocess.run(["git", "stash", "pop"], cwd=REPO_DIR, env=env, capture_output=True, text=True)
             time.sleep(3)
         return False
     except Exception as e:
@@ -646,8 +669,11 @@ def process_one(article: dict, prog: dict) -> tuple[bool, str, "Path | None"]:
 
 
 def main():
+    global MAX_RUNTIME
     limit = None
     target_key = None
+    shard_n = None  # 1-based shard index
+    shard_m = None  # total shards
     args = sys.argv[1:]
     i = 0
     while i < len(args):
@@ -658,6 +684,10 @@ def main():
             limit = int(args[i+1]); i += 1
         elif a == "--key" and i + 1 < len(args):
             target_key = args[i+1]; i += 1
+        elif a == "--shard" and i + 2 < len(args):
+            shard_n = int(args[i+1]); shard_m = int(args[i+2]); i += 2
+        elif a == "--max-runtime" and i + 1 < len(args):
+            MAX_RUNTIME = int(args[i+1]); i += 1
         elif a.isdigit():
             limit = int(a)
         i += 1
@@ -673,6 +703,12 @@ def main():
         todo = [a for a in articles if a["key"] == target_key]
     else:
         todo = [a for a in articles if a["key"] not in done_set and a["key"] not in na_set]
+
+    # 分片：每个 shard 处理 todo[i] where i % shard_m == shard_n - 1
+    if shard_n and shard_m:
+        todo = [a for i, a in enumerate(todo) if i % shard_m == (shard_n - 1)]
+        log(f"shard {shard_n}/{shard_m}: {len(todo)} articles assigned")
+
     log(f"total={len(articles)} done={len(done_set)} not_archived={len(na_set)} failed={len(failed_set)} todo={len(todo)}")
 
     if not todo:
@@ -683,7 +719,8 @@ def main():
     batch_num = prog.get("pushed_batches", 0)
     processed_this_run = 0
     start_time = time.time()
-    MAX_RUNTIME = 480
+    if not MAX_RUNTIME:
+        MAX_RUNTIME = 480
 
     for i, article in enumerate(todo):
         if limit and processed_this_run >= limit:

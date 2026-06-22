@@ -1,4 +1,3 @@
-# Jekyll configuration for dajia archive
 title: 腾讯·大家 存档
 description: web.archive.org 中 dajia.qq.com 历史文章存档
 url: "https://lishuhang.me"
@@ -6,22 +5,13 @@ baseurl: "/dajia"
 timezone: Asia/Shanghai
 lang: zh-CN
 
-# Post settings - use simple /posts/title/ permalink
 permalink: /posts/:title/
 
-# Markdown
 markdown: kramdown
 kramdown:
   input: GFM
   hard_wrap: false
 
-# Collections
-collections:
-  posts:
-    output: true
-    permalink: /posts/:title/
-
-# Defaults
 defaults:
   - scope:
       path: ""
@@ -34,7 +24,6 @@ defaults:
     values:
       layout: "default"
 
-# Exclude
 exclude:
   - README.md
   - Gemfile
@@ -42,3 +31,4 @@ exclude:
   - scripts/
   - _assets/
   - .github/
+  - year/_template.md

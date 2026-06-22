@@ -6,11 +6,11 @@ baseurl: "/dajia"
 timezone: Asia/Shanghai
 lang: zh-CN
 
-# Use minimal theme
-theme: jekyll-theme-minimal
+# No theme - use our own layouts
+# theme: jekyll-theme-minimal
 
 # Post settings
-permalink: /:categories/:year/:month/:day/:title/
+permalink: /posts/:title/
 
 # Markdown
 markdown: kramdown
@@ -27,7 +27,7 @@ collections:
 # Pagination
 plugins:
   - jekyll-paginate
-paginate: 30
+paginate: 50
 paginate_path: "/page:num/"
 
 # Defaults
@@ -37,6 +37,11 @@ defaults:
       type: "posts"
     values:
       layout: "post"
+  - scope:
+      path: ""
+      type: "pages"
+    values:
+      layout: "default"
 
 # Exclude
 exclude:
@@ -44,3 +49,4 @@ exclude:
   - Gemfile
   - Gemfile.lock
   - scripts/
+  - _assets/

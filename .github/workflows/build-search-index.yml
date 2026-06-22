@@ -1,0 +1,105 @@
+name: Build search index
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '_posts/**'
+      - '.github/workflows/build-search-index.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build search-index.json
+        run: |
+          python3 - <<'EOF'
+          import os, re, json, html, sys
+
+          def strip_markdown(text):
+              text = re.sub(r'!\[[^\]]*\]\([^)]+\)', ' ', text)
+              text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+              text = re.sub(r'\*{1,3}([^*]+)\*{1,3}', r'\1', text)
+              text = re.sub(r'_{1,3}([^_]+)_{1,3}', r'\1', text)
+              text = re.sub(r'^#{1,6}\s+', '', text, flags=re.M)
+              text = re.sub(r'^>\s*', '', text, flags=re.M)
+              text = re.sub(r'```[\s\S]*?```', ' ', text)
+              text = re.sub(r'`([^`]+)`', r'\1', text)
+              text = re.sub(r'^---+\s*$', '', text, flags=re.M)
+              text = re.sub(r'<[^>]+>', ' ', text)
+              text = html.unescape(text)
+              text = re.sub(r'\s+', ' ', text).strip()
+              return text
+
+          def parse_post(filepath):
+              try:
+                  with open(filepath, encoding='utf-8') as f:
+                      content = f.read()
+              except Exception as e:
+                  return None
+              m = re.match(r'^---\s*\n(.*?)\n---\s*\n(.*)$', content, re.S)
+              if not m:
+                  return None
+              front_matter, body = m.group(1), m.group(2)
+              title = author = ''
+              archived = True
+              for line in front_matter.split('\n'):
+                  m = re.match(r'^title:\s*"?(.+?)"?\s*$', line)
+                  if m: title = m.group(1).strip()
+                  m = re.match(r'^author:\s*(.+?)\s*$', line)
+                  if m: author = m.group(1).strip().strip('"').strip("'")
+                  m = re.match(r'^archived:\s*(\w+)\s*$', line)
+                  if m: archived = m.group(1).lower() == 'true'
+              fname = os.path.basename(filepath)
+              m = re.match(r'^(\d{4})-(\d{2})-(\d{2})-', fname)
+              if not m:
+                  return None
+              date = f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+              title_slug = re.sub(r'^\d{4}-\d{2}-\d{2}-', '', fname)
+              title_slug = re.sub(r'\.md$', '', title_slug)
+              url = f"/posts/{title_slug}/"
+              plain_body = strip_markdown(body)
+              if len(plain_body) > 5000:
+                  plain_body = plain_body[:5000]
+              return {
+                  'title': title, 'author': author, 'date': date,
+                  'url': url, 'body': plain_body, 'archived': archived,
+              }
+
+          posts = []
+          for fname in sorted(os.listdir('_posts')):
+              if not fname.endswith('.md'):
+                  continue
+              p = parse_post(os.path.join('_posts', fname))
+              if p: posts.append(p)
+
+          with open('search-index.json', 'w', encoding='utf-8') as f:
+              json.dump(posts, f, ensure_ascii=False, separators=(',', ':'))
+          print(f"Wrote {len(posts)} posts to search-index.json", file=sys.stderr)
+          EOF
+
+      - name: Commit search-index.json
+        run: |
+          git config user.name "dajia-bot"
+          git config user.email "bot@lishuhang.me"
+          git add search-index.json
+          if git diff --cached --quiet; then
+            echo "No changes to search-index.json"
+          else
+            git commit -m "Auto-update search-index.json [skip ci]"
+            git push
+          fi

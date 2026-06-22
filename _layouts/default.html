@@ -7,22 +7,62 @@
     <title>{% if page.title %}{{ page.title | escape }} - {% endif %}{{ site.title | escape }}</title>
     <meta name="description" content="{{ page.excerpt | default: site.description | strip_html | normalize_whitespace | truncate: 160 | escape }}">
     <link rel="stylesheet" href="{{ "/assets/main.css" | relative_url }}">
+    <!-- Lunr.js for full-text search -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lunr.js/2.3.9/lunr.min.js"></script>
+    <!-- Chinese segmenter for lunr -->
+    <script src="https://cdn.jsdelivr.net/npm/lunr-languages@1.4.0/lunr.zh.min.js"></script>
   </head>
   <body>
     <header class="site-header">
-      <div class="wrapper">
+      <div class="header-inner">
         <a class="site-title" href="{{ "/" | relative_url }}">{{ site.title | escape }}</a>
+        <div class="search-box">
+          <input type="text" id="global-search" placeholder="全文搜索…" autocomplete="off">
+          <div id="search-results" class="search-results"></div>
+        </div>
       </div>
     </header>
+
+    {% if page.layout == 'home' or page.layout == 'search' %}
+    <nav class="year-month-nav">
+      <div class="year-strip" id="year-strip">
+        <!-- Years populated by JS -->
+      </div>
+      <div class="month-strip" id="month-strip">
+        <!-- Months populated by JS -->
+      </div>
+    </nav>
+    {% endif %}
+
     <main class="page-content" aria-label="Content">
-      <div class="wrapper">
+      {% if page.layout == 'home' or page.layout == 'search' %}
+      <aside class="sidebar-left">
+        <div class="filter-panel">
+          <h3>按年-月筛选</h3>
+          <div class="year-list" id="year-list">
+            <!-- Populated by JS -->
+          </div>
+          <div class="month-list" id="month-list">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </aside>
+      {% endif %}
+      <div class="content-area">
         {{ content }}
       </div>
     </main>
+
     <footer class="site-footer">
-      <div class="wrapper">
-        <p>{{ site.description | escape }}</p>
+      <div class="footer-inner">
+        <p>{{ site.description | escape }} · 共 <strong id="post-count">{{ site.posts.size }}</strong> 篇文章</p>
       </div>
     </footer>
+
+    <script>
+      // Site base URL for absolute path resolution
+      window.DAJIA_BASEURL = "{{ site.baseurl }}";
+    </script>
+    <script src="{{ "/assets/dajia.js" | relative_url }}"></script>
   </body>
 </html>

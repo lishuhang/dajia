@@ -5,13 +5,19 @@
 
 > ⚠️ 如果你修改了脚本逻辑，请同步更新本 README 与 `_assets/` 中的脚本副本，并把改动 push 到 GitHub。
 
+> 📌 **2026-06-22 重构说明**：
+> - Jekyll 主题已重构为极简静态模板（仿 lishuhang/daily），无 JS 动态加载
+> - 横竖屏统一为 topnav 下两栏：年份栏 + 月份栏，当前月高亮
+> - 标题搜索框仅检索文章标题（用户暂时搁置全文检索）
+> - 全文搜索相关代码已删除（search-index.json / dajia.js / GitHub Action）
+
 ---
 
 ## 1. 任务概述
 
 - **数据源**：web.archive.org 收录的 `dajia.qq.com`（腾讯·大家）历史文章
 - **目标**：把每篇文章爬取下来，存为 Jekyll 兼容的 markdown，发布到 `lishuhang.me/dajia`
-- **GitHub repo**：`lishuhang/dajia`（GitHub Pages 已启用，Jekyll 主题 `jekyll-theme-minimal`）
+- **GitHub repo**：`lishuhang/dajia`（GitHub Pages 已启用，自建 Jekyll layouts，无外部 theme）
 - **GitHub token**：通过环境变量 `DAJIA_GH_TOKEN` 传入（用户已在原任务中提供，**不要硬编码到脚本里**，否则 GitHub secret scanning 会拒绝 push）
 - **每 10 篇推一次 commit**
 

@@ -573,11 +573,12 @@ def git_push_batch(batch_num: int, files: list[Path]) -> bool:
         env["GIT_AUTHOR_EMAIL"] = "bot@lishuhang.me"
         env["GIT_COMMITTER_NAME"] = "dajia-bot"
         env["GIT_COMMITTER_EMAIL"] = "bot@lishuhang.me"
-        for f in files:
-            subprocess.run(
-                ["git", "add", str(f.relative_to(REPO_DIR))],
-                cwd=REPO_DIR, env=env, check=False, capture_output=True
-            )
+        # 用 git add _posts/ 整个目录代替逐个文件 add
+        # （文件名含中文/特殊字符时，逐个 add 容易因 shell 转义失败）
+        subprocess.run(
+            ["git", "add", "_posts/"],
+            cwd=REPO_DIR, env=env, check=False, capture_output=True
+        )
         r = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=REPO_DIR, env=env)
         if r.returncode == 0:
             log(f"  no changes to commit")

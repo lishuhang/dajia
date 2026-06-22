@@ -1,0 +1,83 @@
+---
+layout: default
+---
+<div class="main-wrapper">
+
+  {% comment %}All years from posts{% endcomment %}
+  {% assign years = "" | split: "" %}
+  {% for post in site.posts %}
+    {% assign y = post.date | date: "%Y" %}
+    {% unless years contains y %}
+      {% assign years = years | push: y %}
+    {% endunless %}
+  {% endfor %}
+  {% assign years = years | sort | reverse %}
+
+  {% comment %}Active year: page.year or first{% endcomment %}
+  {% assign active_year = page.year %}
+  {% if active_year == nil %}{% assign active_year = years.first %}{% endif %}
+
+  {% comment %}Year bar{% endcomment %}
+  <div class="filter-bar year-bar">
+    <div class="filter-label">年份</div>
+    <div class="filter-options">
+      {% for y in years %}
+        <a class="filter-btn{% if y == active_year %} active{% endif %}"
+           href="{{ "/year/" | append: y | relative_url }}/">{{ y }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% comment %}Find months in active_year{% endcomment %}
+  {% assign months_in_year = "" | split: "" %}
+  {% for post in site.posts %}
+    {% assign py = post.date | date: "%Y" %}
+    {% if py == active_year %}
+      {% assign pm = post.date | date: "%m" %}
+      {% unless months_in_year contains pm %}
+        {% assign months_in_year = months_in_year | push: pm %}
+      {% endunless %}
+    {% endif %}
+  {% endfor %}
+  {% assign months_in_year = months_in_year | sort %}
+
+  {% comment %}Month bar{% endcomment %}
+  <div class="filter-bar month-bar">
+    <div class="filter-label">月份</div>
+    <div class="filter-options">
+      <a class="filter-btn{% if page.month == nil %} active{% endif %}"
+         href="{{ "/year/" | append: active_year | relative_url }}/">全部</a>
+      {% for m in months_in_year %}
+        <a class="filter-btn{% if page.month == m %} active{% endif %}"
+           href="{{ "/year/" | append: active_year | append: "/" | append: m | relative_url }}/">{{ m | plus: 0 }}月</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% comment %}Post list{% endcomment %}
+  {% assign count = 0 %}
+  <div class="post-list">
+    {% for post in site.posts reversed %}
+      {% assign py = post.date | date: "%Y" %}
+      {% if py != active_year %}{% continue %}{% endif %}
+      {% if page.month %}
+        {% assign pm = post.date | date: "%m" %}
+        {% if pm != page.month %}{% continue %}{% endif %}
+      {% endif %}
+      <div class="post-list-item">
+        <span class="post-date">{{ post.date | date: "%Y-%m-%d" }}</span>
+        <span class="post-author">{{ post.author | default: "佚名" }}</span>
+        <a class="post-link" href="{{ post.url | relative_url }}">{{ post.title | escape }}</a>
+      </div>
+      {% assign count = count | plus: 1 %}
+    {% endfor %}
+    {% if count == 0 %}
+      <div class="empty-hint">该时间段暂无文章</div>
+    {% endif %}
+  </div>
+
+  <div class="list-summary">
+    共 {{ count }} 篇 · {{ active_year }}年{% if page.month %} · {{ page.month | plus: 0 }}月{% endif %}
+  </div>
+
+</div>

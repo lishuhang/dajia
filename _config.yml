@@ -6,10 +6,7 @@ baseurl: "/dajia"
 timezone: Asia/Shanghai
 lang: zh-CN
 
-# No theme - use our own layouts
-# theme: jekyll-theme-minimal
-
-# Post settings
+# Post settings - use simple /posts/title/ permalink
 permalink: /posts/:title/
 
 # Markdown
@@ -23,12 +20,6 @@ collections:
   posts:
     output: true
     permalink: /posts/:title/
-
-# Pagination
-plugins:
-  - jekyll-paginate
-paginate: 50
-paginate_path: "/page:num/"
 
 # Defaults
 defaults:
@@ -50,3 +41,4 @@ exclude:
   - Gemfile.lock
   - scripts/
   - _assets/
+  - .github/

@@ -1,24 +1,51 @@
 /* dajia archive - client-side title-only search
-   Posts data is embedded in the page (window.DAJIA_POSTS).
-   No external libs, no network requests.
+   Fetches /dajia/search.json (built by Jekyll from search.md)
+   No external libs.
 */
 (function() {
   'use strict';
-  var POSTS = window.DAJIA_POSTS || [];
   var input = document.getElementById('title-search');
   var results = document.getElementById('search-results');
   if (!input || !results) return;
 
-  // Pre-build lowercase title index for fast substring search
-  var idx = POSTS.map(function(p, i) {
-    return {
-      i: i,
-      title_lc: (p.title || '').toLowerCase(),
-      author_lc: (p.author || '').toLowerCase(),
-    };
-  });
+  var POSTS = null;
+  var idx = null;
+  var baseurl = '';
 
-  var debounceTimer = null;
+  // Detect baseurl from a known asset path
+  var scripts = document.getElementsByTagName('script');
+  for (var i = 0; i < scripts.length; i++) {
+    var src = scripts[i].src || '';
+    var m = src.match(/^(.*)\/assets\/search\.js$/);
+    if (m) { baseurl = m[1]; break; }
+  }
+
+  function ensureLoaded(cb) {
+    if (POSTS !== null) { cb(); return; }
+    fetch(baseurl + '/search.json').then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function(data) {
+      POSTS = data || [];
+      idx = POSTS.map(function(p, i) {
+        return {
+          i: i,
+          title_lc: (p.title || '').toLowerCase(),
+          author_lc: (p.author || '').toLowerCase(),
+        };
+      });
+      cb();
+    }).catch(function(e) {
+      console.warn('search.json load failed:', e);
+    });
+  }
+
+  function escapeHtml(s) {
+    if (!s) return '';
+    return String(s).replace(/[&<>"']/g, function(c) {
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
 
   function search(q) {
     q = (q || '').trim().toLowerCase();
@@ -49,19 +76,17 @@
     results.classList.add('visible');
   }
 
-  function escapeHtml(s) {
-    if (!s) return '';
-    return String(s).replace(/[&<>"']/g, function(c) {
-      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
-    });
-  }
-
+  var debounceTimer = null;
   input.addEventListener('input', function() {
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(function() { search(input.value); }, 200);
+    debounceTimer = setTimeout(function() {
+      ensureLoaded(function() { search(input.value); });
+    }, 200);
   });
   input.addEventListener('focus', function() {
-    if (input.value.trim()) search(input.value);
+    if (input.value.trim()) {
+      ensureLoaded(function() { search(input.value); });
+    }
   });
   input.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {

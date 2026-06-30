@@ -94,7 +94,12 @@ def fetch_url(url: str, timeout: int = 30) -> requests.Response | None:
 
 
 def fetch_article_html(article: dict) -> tuple[str, str] | None:
-    """返回 (html_text, archive_ts) 或 None。"""
+    """返回 (html_text, archive_ts) 或 None。
+
+    若所有 snapshot 都返回 200 但内容短（< 1000 字节，通常是 qq.com 404 重定向页），
+    返回 ('', ts) 表示 "已被 archive.org 收录但内容不可用"（应当标记 not_archived）。
+    只有真网络错误或非 200 才返回 None（fetch_failed）。
+    """
     original = article["original_url"]
     ts = article["timestamp"]
     key_safe = article["key"].strip("/").replace("/", "_")
@@ -108,6 +113,8 @@ def fetch_article_html(article: dict) -> tuple[str, str] | None:
         except Exception:
             pass
 
+    short_200_ts = None  # 记录碰到 200-but-short 的时间戳
+
     archive_url = f"https://web.archive.org/web/{ts}id_/{original}"
     r = fetch_url(archive_url, timeout=45)
     if r and r.status_code == 200 and len(r.content) > 1000:
@@ -115,6 +122,8 @@ def fetch_article_html(article: dict) -> tuple[str, str] | None:
         with open(html_path, "wb") as f:
             f.write(r.content)
         return decode_html(r.content), ts
+    if r and r.status_code == 200:
+        short_200_ts = ts
 
     log(f"  primary ts failed, finding alternatives...")
     alt_ts = find_alt_timestamps(original)
@@ -128,6 +137,12 @@ def fetch_article_html(article: dict) -> tuple[str, str] | None:
             with open(html_path_alt, "wb") as f:
                 f.write(r.content)
             return decode_html(r.content), alt
+        if r and r.status_code == 200 and short_200_ts is None:
+            short_200_ts = alt
+
+    # 所有 snapshot 都是 200-but-short：archived 但内容不可用
+    if short_200_ts:
+        return "", short_200_ts
     return None
 
 
@@ -655,6 +670,27 @@ def process_one(article: dict, prog: dict) -> tuple[bool, str, "Path | None"]:
         return False, "fetch_failed", None
 
     html, archive_ts = result
+
+    # 空 html 表示 archive.org 返回了 200 但内容是 qq.com 404 重定向页
+    # 直接标记为 not_archived，不调用 parse_article
+    if not html:
+        log(f"  not archived (200 but short content), marking as not_archived")
+        meta = {
+            "title": f"（未被收录）{article['key']}",
+            "author": "未知",
+            "date": archive_ts[:4] + "-" + archive_ts[4:6] + "-" + archive_ts[6:8],
+            "content": f"本文未被 web.archive.org 完整收录。\n\n原始 URL: {article['original_url']}",
+            "archived": False,
+        }
+        fname = build_filename(meta, article)
+        fpath = POSTS_DIR / fname
+        md = build_markdown(meta, article, archive_ts)
+        with open(fpath, "w", encoding="utf-8") as f:
+            f.write(md)
+        prog.setdefault("not_archived", []).append(key)
+        save_progress(prog)
+        return True, "not_archived", fpath
+
     try:
         meta = parse_article(html, article, archive_ts)
     except Exception as e:
@@ -749,7 +785,7 @@ def main():
         key = article["key"]
         log(f"[{i+1}/{len(todo)}] {key}")
         ok, reason, fpath = process_one(article, prog)
-        if ok and reason == "ok" and fpath:
+        if ok and reason in ("ok", "not_archived") and fpath:
             batch_files.append(fpath)
             if len(batch_files) >= 10:
                 batch_num += 1

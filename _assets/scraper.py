@@ -28,6 +28,19 @@ from pathlib import Path
 import requests
 from bs4 import BeautifulSoup, NavigableString
 
+# ============ web.archive.org IP 强制 (沙箱 DNS 解析到 207.241.237.3 不可达，改用 .2) ============
+import urllib3.util.connection as _u3conn
+_FORCE_IP = {"web.archive.org": "207.241.237.2"}
+_orig_create_connection = _u3conn.create_connection
+
+def _patched_create_connection(address, *args, **kwargs):
+    host, port = address
+    if host in _FORCE_IP:
+        address = (_FORCE_IP[host], port)
+    return _orig_create_connection(address, *args, **kwargs)
+
+_u3conn.create_connection = _patched_create_connection
+
 # ============ 路径 ============
 BASE = Path("/home/z/my-project")
 CACHE = BASE / "dajia-cache"
@@ -703,7 +716,10 @@ def main():
     if target_key:
         todo = [a for a in articles if a["key"] == target_key]
     else:
-        todo = [a for a in articles if a["key"] not in done_set and a["key"] not in na_set]
+        # 跳过 done / not_archived / failed (failed 列表中的不再重试，避免 30s backoff 拖垮吞吐)
+        todo = [a for a in articles if a["key"] not in done_set
+                and a["key"] not in na_set
+                and a["key"] not in failed_set]
 
     # 分片：每个 shard 处理 todo[i] where i % shard_m == shard_n - 1
     if shard_n and shard_m:
@@ -741,10 +757,10 @@ def main():
                 prog["pushed_batches"] = batch_num
                 save_progress(prog)
                 batch_files = []
-            time.sleep(1.5)
+            time.sleep(0.6)
         elif reason == "fetch_failed":
-            log(f"  fetch failed, backing off 30s")
-            time.sleep(30)
+            log(f"  fetch failed, backing off 10s")
+            time.sleep(10)
         else:
             log(f"  skip: {reason}")
             time.sleep(1)
